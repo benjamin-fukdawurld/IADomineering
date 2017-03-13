@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include <cassert>
+#include <algorithm>
 
 using namespace std;
 
@@ -131,7 +132,7 @@ class Board
 
 		}
 
-		Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data) {}
+		Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data) { m_cacheH = b.m_cacheH; m_cacheV = b.m_cacheV; }
 
 
 		Board &operator=(const Board &b)
@@ -147,6 +148,9 @@ class Board
 			for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
 				m_data[i] = b.m_data[i];
 
+			m_cacheH = b.m_cacheH;
+			m_cacheV = b.m_cacheV;
+
 			return *this;
 		}
 
@@ -160,10 +164,8 @@ class Board
 			if (type == Horizontal)
 				return getPossiblesHorizontal();
 
-			if (type == Vertical)
-				return getPossiblesVertical();
 
-			return std::vector<size_t>();
+			return getPossiblesVertical();
 		}
 
 
@@ -318,9 +320,40 @@ Move getMax(const Board &b, Board::Type type)
 }
 
 
-std::vector<Move> minimax()
+struct MoveNode
 {
-	
+	Move move;
+	int value;
+	vector<MoveNode> children;
+
+	bool operator<(const MoveNode &node) const { return value < node.value; }
+};
+
+int minimax(const Board &b, vector<MoveNode> &tree, Board::Type type, size_t depth)
+{
+	auto v = b.getPossibles(type);
+
+	int maxValue = -100000000;
+
+	for (size_t i = 0, imax = v.size(); i < imax; ++i)
+	{
+		MoveNode current;
+		current.move.board = b;
+		current.move.type = type;
+		current.move.pos = v[i];
+
+		current.move.board.play(type, current.move.pos);
+		
+		if(depth > 0)
+		maxValue = std::max(minimax(current.move.board, current.children, (type == Board::Horizontal ? Board::Vertical : Board::Horizontal), depth - 1), maxValue);
+		else
+		maxValue = std::max(current.move.value(), maxValue);
+
+		tree.push_back(current);
+	}
+
+	return maxValue;
+
 }
 
 
@@ -332,12 +365,28 @@ int main(int argc, char *argv[])
 	while(!b.getPossibles(t).empty())
 	{
 		cout << b.toString() << endl;
-		auto m = getMax(b, t);
+		Move m;
+		if(t == Board::Vertical)
+		{
+			vector<MoveNode> tree;
+			minimax(b, tree, t, 2);
+			m = tree[0].move;
+			for (int i = 1; i < tree.size(); ++i)
+			{
+				if (m.value() < tree[i].move.value())
+					m = tree[i].move;
+			}
+		}
+		else
+		m = getMax(b, t);
+
 		b.play(t, m.pos);
 		t = (t == Board::Horizontal ? Board::Vertical : Board::Horizontal);
 	}
 
 	cout << b.toString();
+
+	cout << endl;
 
 	return 0;
 }
