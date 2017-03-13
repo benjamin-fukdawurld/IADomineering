@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
-
 #include <cassert>
 
 using namespace std;
@@ -87,12 +86,11 @@ int main(int argc, char *argv[])
 	return 0;
 }*/
 
-
-
-
+// Classe pour le plateau de jeu
 class Board
 {
 	public:
+		// Type de joueur
 		enum Type
 		{
 			None,
@@ -102,9 +100,11 @@ class Board
 
 
 	private:
+		// Dimmension en x et en y
 		size_t m_width;
 		size_t m_height;
 
+		// Tableau de données
 		Type *m_data;
 
 		mutable std::vector<size_t> m_cacheH;
@@ -112,8 +112,10 @@ class Board
 
 	public:
 
+		// Constructeur par défaut
 		Board() : m_width(0), m_height(0), m_data(nullptr) {}
 
+		// Constructeur avec des dimensions
 		Board(size_t w, size_t h, Type *data = nullptr) : m_width(w), m_height(h)
 		{
 			m_data = new Type[m_width * m_height];
@@ -131,9 +133,10 @@ class Board
 
 		}
 
+		// Constructeur par copie
 		Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data) {}
 
-
+		// Copie
 		Board &operator=(const Board &b)
 		{
 			if (m_data)
@@ -155,6 +158,7 @@ class Board
 			delete[] m_data;
 		}
 
+		// list des coups possibles
 		const std::vector<size_t> &getPossibles(Type type) const
 		{
 			if (type == Horizontal)
@@ -167,12 +171,13 @@ class Board
 		}
 
 
-
+		// Joue un coup à un emplacement
 		bool play(Type type, size_t x, size_t y)
 		{
 			return play(type, getPos(std::make_pair(x, y)));
 		}
 
+		// Joue sur le tableua à une dimension
 		bool play(Type type, size_t pos)
 		{
 			assert(type != None);
@@ -189,7 +194,7 @@ class Board
 			return true;
 		}
 
-
+		// Récupère les coordonées à partir d'une position
 		std::pair<size_t, size_t> getCoordinate(size_t pos) const
 		{
 			size_t x = pos % m_width, y = pos / m_width;
@@ -197,8 +202,7 @@ class Board
 			return std::make_pair(x, y);
 		}
 
-
-
+		// Récupère la position à partir d'une coordonnée
 		size_t getPos(std::pair<size_t, size_t> p) const
 		{
 			size_t pos = p.first + p.second * m_width;
@@ -206,12 +210,17 @@ class Board
 			return pos;
 		}
 
-
+		// Affiche le plateau de jeu
 		std::string toString() const
 		{
 			ostringstream oss;
+			oss << "  ";
+			for (size_t j = 0; j < m_width; ++j)
+				oss << j << " ";
+			oss << endl;
 			for (size_t i = 0; i < m_height; ++i)
 			{
+				oss << i << " ";
 				size_t currentRow = i * m_width;
 				for (size_t j = 0; j < m_width; ++j)
 				{
@@ -226,7 +235,7 @@ class Board
 
 
 	private:
-
+		// Donne les coup possibles pour le jouer horizontal
 		const std::vector<size_t> &getPossiblesHorizontal() const
 		{
 			if (!m_cacheH.empty())
@@ -247,6 +256,7 @@ class Board
 			return m_cacheH;
 		}
 
+		// Donne les coup possibles pour le jouer vertical
 		const std::vector<size_t> &getPossiblesVertical() const
 		{
 			if (!m_cacheV.empty())
@@ -274,7 +284,7 @@ struct Move
 	size_t pos;
 	Board board;
 
-
+	// Fonction d'évaluation
 	int value() const
 	{
 		int tmp = board.getPossibles(type).size();
@@ -290,8 +300,7 @@ struct Move
 };
 
 
-
-
+// Récupère la coup de coût 
 Move getMax(const Board &b, Board::Type type)
 {
 	auto v = b.getPossibles(type);
@@ -318,22 +327,37 @@ Move getMax(const Board &b, Board::Type type)
 }
 
 
-std::vector<Move> minimax()
+/*std::vector<Move> minimax()
 {
 	
-}
+}*/
 
 
 
 int main(int argc, char *argv[])
 {
+	// Initialisation des datas
 	Board b(8, 8);
 	Board::Type t(Board::Horizontal);
+	int inputPlayerW, inputPlayerH;
+	// Tant qu'il y a un coup possible
 	while(!b.getPossibles(t).empty())
 	{
 		cout << b.toString() << endl;
-		auto m = getMax(b, t);
-		b.play(t, m.pos);
+		if (t == Board::Horizontal) {
+			cout << "Horizontal Player: Colomn ? ";
+			cin >> inputPlayerW; 
+			cout << "Line ? ";
+			cin >> inputPlayerH;
+			std::pair<int, int> p;
+			p.first = inputPlayerW; p.second = inputPlayerH;
+			b.play(t, b.getPos(p));
+		}
+		else
+		{
+			auto m = getMax(b, t);
+			b.play(t, m.pos);
+		}
 		t = (t == Board::Horizontal ? Board::Vertical : Board::Horizontal);
 	}
 
