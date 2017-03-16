@@ -3,6 +3,8 @@
 #include <sstream>
 #include <cassert>
 #include <algorithm>
+#include <iterator>
+#include <ctime>
 
 using namespace std;
 
@@ -338,6 +340,88 @@ struct MoveNode
 	bool operator<(const MoveNode &node) const { return value < node.value; }
 };
 
+int max(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int alpha, int beta);
+int min(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int alpha, int beta);
+
+vector<int> killer(3, -1);
+vector<int> history;
+clock_t beginT;
+
+bool sortWithHistory(int i, int j) { return (i<j); }
+
+int max(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int alpha, int beta) {
+	auto v = b.getPossibles(type);
+
+	int maxValue = -100000000;
+
+	if (double(clock() - beginT) / CLOCKS_PER_SEC > 3){
+		return -1;
+	}
+	
+	if (depth == 0) {
+		return v.size();
+	}
+
+	if(killer[depth-1] != -1){
+		v.insert(v.begin(), killer[depth-1]);
+	}
+
+	if (history.size() > 0) {
+		std::sort(v.begin(), v.end(), sortWithHistory);
+	}
+
+	for (int m=0; m < v.size(); m++) {
+		MoveNode current;
+		current.move.board = b;
+		current.move.type = type;
+		current.move.pos = v[m];
+
+		current.move.board.play(type, current.move.pos);
+		int e = min(current.move.board, current.children, (type == Board::Horizontal ? Board::Vertical : Board::Horizontal), depth - 1, alpha, beta);
+
+		if (e > alpha) {
+			alpha = e;
+			if (alpha >= beta) {
+				killer[depth-1] = v[m];
+				history[m] += pow(depth, 4);
+				return beta;
+			}
+		}
+
+		tree.push_back(current);
+	}
+	return alpha;
+}
+
+int min(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int alpha, int beta) {
+	auto v = b.getPossibles(type);
+
+	int maxValue = -100000000;
+
+
+	if (depth == 0) {
+		return v.size();
+	}
+
+	for (int m=0; m < v.size(); m++) {
+		MoveNode current;
+		current.move.board = b;
+		current.move.type = type;
+		current.move.pos = v[m];
+
+		current.move.board.play(type, current.move.pos);
+		int e = max(current.move.board, current.children, (type == Board::Horizontal ? Board::Vertical : Board::Horizontal), depth - 1, alpha, beta);
+
+		if (e < beta) {
+			beta = e;
+			if (alpha >= beta) {
+				return alpha;
+			}
+		}
+	}
+	return beta;
+}
+
 int minimax(const Board &b, vector<MoveNode> &tree, Board::Type type, size_t depth)
 {
 	auto v = b.getPossibles(type);
@@ -397,16 +481,37 @@ int main(int argc, char *argv[])
 		if(t == Board::Vertical)
 		{
 			vector<MoveNode> tree;
-			minimax(b, tree, t, 2);
-			m = tree[0].move;
-			for (int i = 1; i < tree.size(); ++i)
+			//minimax(b, tree, t, 2);
+			//std::fill(killer.begin(), killer.begin() + 2, -1);
+			std::fill_n(std::back_inserter(killer), 2, -1);
+			beginT = clock();
+			//max(b, tree, t, 2, +10000000, -1000000);
+			vector<MoveNode> treetmp;
+			//history = vector<int>(b.getPossibles.size(), 0);
+			for (size_t i = 0; i < 3; i++)
 			{
-				if (m.value() < tree[i].move.value())
-					m = tree[i].move;
+				if (max(b, tree, t, i, +10000000, -1000000) != -1) {
+					treetmp = tree;
+				}
+			}
+			//if(tree.size()>0)
+				m = treetmp[0].move;
+			for (int i = 1; i < treetmp.size(); ++i)
+			{
+				if (m.value() < treetmp[i].move.value())
+					m = treetmp[i].move;
 			}
 		}
-		else
-		m = getMax(b, t);
+		else {
+				cout << "Horizontal Player: Colomn ? ";
+				cin >> inputPlayerW;
+				cout << "Line ? ";
+				cin >> inputPlayerH;
+				std::pair<int, int> p;
+				p.first = inputPlayerW; p.second = inputPlayerH;
+				m.pos = b.getPos(p);
+			}
+		//m = getMax(b, t);
 
 		b.play(t, m.pos);
 		t = (t == Board::Horizontal ? Board::Vertical : Board::Horizontal);
