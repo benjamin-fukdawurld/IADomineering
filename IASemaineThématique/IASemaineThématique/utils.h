@@ -52,7 +52,15 @@ class Board
 
 		size_t getPos(std::pair<size_t, size_t> p) const;
 
+		int evaluate(Type t) const
+		{
+			return getPossibles(t).size() - getPossibles(inverse(t)).size();
+		}
+
 		std::string toString() const;
+
+		static Type inverse(Type t) { return (t == Horizontal ? Vertical : Horizontal); }
+
 
 	private:
 
@@ -72,6 +80,9 @@ struct Move
 
 	Move() : value(-1) {}
 
+	Move(Board::Type type, size_t pos, int value) : type(type), pos(pos), value(-1) {}
+
+
 	bool operator<(const Move &m) const
 	{
 		return value < m.value;
@@ -87,4 +98,16 @@ int minimax_getMax(Board &b, Move &maxMove, Board::Type type);
 
 
 int minimax(Board &b, Move &max_move, Board::Type type, size_t depth);
+
+
+namespace FDAI
+{
+	int internal_minimax(Board &b, Move *m, Board::Type t, size_t depth, const std::vector<size_t> &v, size_t from, size_t to);
+
+	int minimax(Board &b, Move *m, Board::Type t, size_t depth);
+
+	int max(Board &b, Board::Type t, size_t depth);
+
+	int min(Board &b, Board::Type t, size_t depth);
+}
 

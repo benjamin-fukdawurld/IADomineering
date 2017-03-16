@@ -96,6 +96,9 @@ int main(int argc, char *argv[])
 #include "utils.h"
 
 
+
+
+
 int main(int argc, char *argv[])
 {
 	Board b(8, 8);
@@ -107,7 +110,7 @@ int main(int argc, char *argv[])
 		Move m;
 		if(t == Board::Vertical)
 		{
-			minimax(b, m, t, 2);
+			FDAI::minimax(b, &m, t, 5);
 		}
 		else
 		m = getMax(b, t);

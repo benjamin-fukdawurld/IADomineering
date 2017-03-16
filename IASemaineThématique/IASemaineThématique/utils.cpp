@@ -398,3 +398,123 @@ int minimax(Board &b, Move &max_move, Board::Type type, size_t depth)
 	return maxValue;
 
 }
+
+
+namespace FDAI
+{
+
+	int internal_minimax(Board &b, Move *m, Board::Type t, size_t depth, const std::vector<size_t> &v, size_t from, size_t to)
+	{
+		int eval = -1000000000;
+		for (size_t i = from, imax = to; i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = FDAI::min(b, Board::inverse(t), depth - 1);
+			b.undo(t, v[i]);
+			if (min_eval > eval)
+			{
+				eval = min_eval;
+				if (m)
+					*m = Move(t, v[i], eval);
+			}
+		}
+
+		return eval;
+	}
+
+	int minimax(Board &b, Move *m, Board::Type t, size_t depth)
+	{
+		if (depth == 0)
+		{
+			Move tmp;
+			int ret = minimax_getMax(b, tmp, t);
+			if (m)
+				*m = tmp;
+			return ret;
+		}
+
+		std::vector<size_t> v = b.getPossibles(t);
+
+		if (v.size() < 8)
+			return internal_minimax(b, m, t, depth, v, 0, v.size());
+
+		int eval = -1000000000;
+		std::vector<Move> v_m(8);
+		std::vector<int> v_eval(8, -1000000000);
+
+		{
+			std::vector<std::future<int>> fut(8);
+			size_t nb = v.size() / 8;
+			std::vector<Board> v_b(8, b);
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i] = std::async(std::launch::async, internal_minimax, std::ref(v_b[i]), &(v_m[i]), t, depth, std::ref(v), i * nb, std::min(i + 1 * nb, v.size()));
+			}
+
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i].wait();
+				v_eval[i] = fut[i].get();
+			}
+		}
+
+		size_t pos = 0;
+		eval = v_eval[0];
+		for (size_t i = 1; i < 8; ++i)
+		{
+			if (v_eval[i] > eval)
+			{
+				eval = v_eval[i];
+				pos = i;
+			}
+		}
+
+		if (m)
+			*m = v_m[pos];
+
+		return eval;
+	}
+
+	int max(Board &b, Board::Type t, size_t depth)
+	{
+		if (depth == 0)
+		{
+			return b.evaluate(t);
+		}
+
+		int eval = -1000000000;
+		std::vector<size_t> v = b.getPossibles(t);
+		for (size_t i = 0, imax = v.size(); i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = FDAI::min(b, Board::inverse(t), depth - 1);
+			b.undo(t, v[i]);
+			if (min_eval > eval)
+				eval = min_eval;
+		}
+
+		return eval;
+	}
+
+	int min(Board &b, Board::Type t, size_t depth)
+	{
+		if (depth == 0)
+		{
+			return b.evaluate(Board::inverse(t));
+		}
+
+		int eval = 1000000000;
+		std::vector<size_t> v = b.getPossibles(t);
+		for (size_t i = 0, imax = v.size(); i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int max_eval = FDAI::max(b, Board::inverse(t), depth - 1);
+			b.undo(t, v[i]);
+			if (max_eval < eval)
+				eval = max_eval;
+		}
+
+		return eval;
+	}
+
+}
