@@ -1,11 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <sstream>
-
 #include <cassert>
 #include <algorithm>
-
-#include <future>
 
 using namespace std;
 
@@ -90,37 +87,332 @@ int main(int argc, char *argv[])
 	return 0;
 }*/
 
+// Classe pour le plateau de jeu
+class Board
+{
+	public:
+		// Type de joueur
+		enum Type
+		{
+			None,
+			Vertical,
+			Horizontal
+		};
 
 
+	private:
+		// Dimmension en x et en y
+		size_t m_width;
+		size_t m_height;
 
-#include "utils.h"
+		// Tableau de données
+		Type *m_data;
+
+		mutable std::vector<size_t> m_cacheH;
+		mutable std::vector<size_t> m_cacheV;
+
+	public:
+
+		// Constructeur par défaut
+		Board() : m_width(0), m_height(0), m_data(nullptr) {}
+
+		// Constructeur avec des dimensions
+		Board(size_t w, size_t h, Type *data = nullptr) : m_width(w), m_height(h)
+		{
+			m_data = new Type[m_width * m_height];
+
+			if (data == nullptr)
+			{
+				for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+					m_data[i] = None;
+			}
+			else
+			{
+				for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+					m_data[i] = data[i];
+			}
+
+		}
+
+		// Constructeur par copie
+		Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data) { m_cacheH = b.m_cacheH; m_cacheV = b.m_cacheV; }
+
+		// Copie
+		Board &operator=(const Board &b)
+		{
+			if (m_data)
+				delete[] m_data;
+
+			m_width = b.m_width;
+			m_height = b.m_height;
+			
+			m_data = new Type[m_width * m_height];
+
+			for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+				m_data[i] = b.m_data[i];
+
+			m_cacheH = b.m_cacheH;
+			m_cacheV = b.m_cacheV;
+
+			return *this;
+		}
+
+		~Board()
+		{
+			delete[] m_data;
+		}
+
+		// list des coups possibles
+		const std::vector<size_t> &getPossibles(Type type) const
+		{
+			if (type == Horizontal)
+				return getPossiblesHorizontal();
 
 
+			return getPossiblesVertical();
+		}
+
+
+		// Joue un coup à un emplacement
+		bool play(Type type, size_t x, size_t y)
+		{
+			return play(type, getPos(std::make_pair(x, y)));
+		}
+
+		// Joue sur le tableua à une dimension
+		bool play(Type type, size_t pos)
+		{
+			assert(type != None);
+			size_t cell1 = pos, cell2;
+			cell2 = cell1 + (type == Horizontal ? 1 : m_width);
+
+			if (m_data[cell1] != None || m_data[cell2] != None)
+				return false;
+
+			m_cacheH.clear();
+			m_cacheV.clear();
+
+			m_data[cell1] = m_data[cell2] = type;
+			return true;
+		}
+
+		// Récupère les coordonées à partir d'une position
+		std::pair<size_t, size_t> getCoordinate(size_t pos) const
+		{
+			size_t x = pos % m_width, y = pos / m_width;
+
+			return std::make_pair(x, y);
+		}
+
+		// Récupère la position à partir d'une coordonnée
+		size_t getPos(std::pair<size_t, size_t> p) const
+		{
+			size_t pos = p.first + p.second * m_width;
+
+			return pos;
+		}
+
+		// Affiche le plateau de jeu
+		std::string toString() const
+		{
+			ostringstream oss;
+			oss << "  ";
+			for (size_t j = 0; j < m_width; ++j)
+				oss << j << " ";
+			oss << endl;
+			for (size_t i = 0; i < m_height; ++i)
+			{
+				oss << i << " ";
+				size_t currentRow = i * m_width;
+				for (size_t j = 0; j < m_width; ++j)
+				{
+					size_t currentCell = currentRow + j;
+					oss << (m_data[currentCell] == Horizontal ? 'H' : (m_data[currentCell] == Vertical ? 'V' : '_')) << ' ';
+				}
+				oss << endl;
+			}
+
+			return oss.str();
+		}
+
+
+	private:
+		// Donne les coup possibles pour le jouer horizontal
+		const std::vector<size_t> &getPossiblesHorizontal() const
+		{
+			if (!m_cacheH.empty())
+				return m_cacheH;
+
+			std::vector<size_t> ret;
+			for (size_t i = 0; i < m_height; ++i)
+			{
+				size_t currentRow = i * m_width;
+				for (size_t j = 0; j < m_width - 1; ++j)
+				{
+					size_t currentCell = currentRow + j;
+					if (m_data[currentCell] == m_data[currentCell + 1] && m_data[currentCell] == None)
+						m_cacheH.push_back(currentCell);
+				}
+			}
+
+			return m_cacheH;
+		}
+
+		// Donne les coup possibles pour le jouer vertical
+		const std::vector<size_t> &getPossiblesVertical() const
+		{
+			if (!m_cacheV.empty())
+				return m_cacheV;
+
+			for (size_t i = 0; i < m_height - 1; ++i)
+			{
+				size_t currentRow = i * m_width;
+				for (size_t j = 0; j < m_width; ++j)
+				{
+					size_t currentCell = currentRow + j;
+					if (m_data[currentCell] == m_data[currentCell + m_width] && m_data[currentCell] == None)
+						m_cacheV.push_back(currentCell);
+				}
+			}
+
+			return m_cacheV;
+		}
+};
+
+
+struct Move
+{
+	Board::Type type;
+	size_t pos;
+	Board board;
+
+	// Fonction d'évaluation
+	int value() const
+	{
+		int tmp = board.getPossibles(type).size();
+		tmp -= board.getPossibles(type == Board::Horizontal ? Board::Vertical : Board::Horizontal).size();
+
+		return tmp;
+	}
+
+	bool operator<(const Move &m) const
+	{
+		return value() < m.value();
+	}
+};
+
+
+// Récupère la coup de coût 
+Move getMax(const Board &b, Board::Type type)
+{
+	auto v = b.getPossibles(type);
+	Move maxMove;
+	maxMove.board = b;
+	maxMove.type = type;
+	maxMove.pos = v[0];
+	maxMove.board.play(type, maxMove.pos);
+
+	for (size_t i = 1, imax = v.size(); i < imax; ++i)
+	{
+		Move current;
+		current.board = b;
+		current.type = type;
+		current.pos = v[i];
+
+		current.board.play(type, current.pos);
+
+		if (maxMove < current)
+			maxMove = current;
+	}
+
+	return maxMove;
+}
+
+
+struct MoveNode
+{
+	Move move;
+	int value;
+	vector<MoveNode> children;
+
+	bool operator<(const MoveNode &node) const { return value < node.value; }
+};
+
+int minimax(const Board &b, vector<MoveNode> &tree, Board::Type type, size_t depth)
+{
+	auto v = b.getPossibles(type);
+
+	int maxValue = -100000000;
+
+	for (size_t i = 0, imax = v.size(); i < imax; ++i)
+	{
+		MoveNode current;
+		current.move.board = b;
+		current.move.type = type;
+		current.move.pos = v[i];
+
+		current.move.board.play(type, current.move.pos);
+		
+		if(depth > 0)
+		maxValue = std::max(minimax(current.move.board, current.children, (type == Board::Horizontal ? Board::Vertical : Board::Horizontal), depth - 1), maxValue);
+		else
+		maxValue = std::max(current.move.value(), maxValue);
+
+		tree.push_back(current);
+	}
+
+	return maxValue;
+
+}
 
 
 
 int main(int argc, char *argv[])
 {
+	// Initialisation des datas
 	Board b(8, 8);
 	Board::Type t(Board::Horizontal);
-	cout << b.toString() << endl;
+	int inputPlayerW, inputPlayerH;
+	// Tant qu'il y a un coup possible
 	while(!b.getPossibles(t).empty())
 	{
-		cout << ((t == Board::Horizontal) ? "Horizontal" : "Vertical") << endl;
+		cout << b.toString() << endl;
+
+		/*if (t == Board::Horizontal) {
+			cout << "Horizontal Player: Colomn ? ";
+			cin >> inputPlayerW; 
+			cout << "Line ? ";
+			cin >> inputPlayerH;
+			std::pair<int, int> p;
+			p.first = inputPlayerW; p.second = inputPlayerH;
+			b.play(t, b.getPos(p));
+		}
+		else
+		{
+			auto m = getMax(b, t);
+			b.play(t, m.pos);
+		}*/
+
 		Move m;
 		if(t == Board::Vertical)
 		{
-			FDAI::minimax(b, &m, t, 5);
+			vector<MoveNode> tree;
+			minimax(b, tree, t, 2);
+			m = tree[0].move;
+			for (int i = 1; i < tree.size(); ++i)
+			{
+				if (m.value() < tree[i].move.value())
+					m = tree[i].move;
+			}
 		}
 		else
 		m = getMax(b, t);
 
 		b.play(t, m.pos);
-		cout << b.toString() << endl;
 		t = (t == Board::Horizontal ? Board::Vertical : Board::Horizontal);
 	}
 
-	cout << b.toString() << endl;
+	cout << b.toString();
 
 	cout << endl;
 
