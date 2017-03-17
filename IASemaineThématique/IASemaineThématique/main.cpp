@@ -181,7 +181,7 @@ int minimax(Board &b, vector<Move> &tree, Board::Type type, size_t depth)
 
 
 
-int main(int argc, char *argv[])
+int _main(int argc, char *argv[])
 {
 	// Initialisation des datas
 	Board b(8, 8);
@@ -257,4 +257,10 @@ int main(int argc, char *argv[])
 	cout << endl;
 
 	return 0;
+}
+
+
+int main(int argc, char *argv[])
+{
+	return run(argc, argv);
 }
