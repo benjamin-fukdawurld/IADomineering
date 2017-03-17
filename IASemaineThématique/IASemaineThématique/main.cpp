@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <ctime>
+#include "utils.h"
 
 using namespace std;
 
@@ -451,7 +452,7 @@ int minimax(const Board &b, vector<MoveNode> &tree, Board::Type type, size_t dep
 
 
 
-int main(int argc, char *argv[])
+int _main(int argc, char *argv[])
 {
 	// Initialisation des datas
 	Board b(8, 8);
@@ -525,4 +526,10 @@ int main(int argc, char *argv[])
 	cout << endl;
 
 	return 0;
+}
+
+
+int main(int argc, char *argv[])
+{
+	return run(argc, argv);
 }
