@@ -347,16 +347,16 @@ vector<int> killer(3, -1);
 vector<int> history;
 clock_t beginT;
 
-bool sortWithHistory(int i, int j) { return (i<j); }
+bool sortWithHistory(size_t i, size_t j) { return (history[i]<history[j]); }
 
 int max(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int alpha, int beta) {
 	auto v = b.getPossibles(type);
 
 	int maxValue = -100000000;
 
-	if (double(clock() - beginT) / CLOCKS_PER_SEC > 3){
+	/*if (double(clock() - beginT) / CLOCKS_PER_SEC > 3){
 		return -1;
-	}
+	}*/
 	
 	if (depth == 0) {
 		return v.size();
@@ -383,7 +383,7 @@ int max(const Board &b, vector<MoveNode> &tree, Board::Type type, int depth, int
 			alpha = e;
 			if (alpha >= beta) {
 				killer[depth-1] = v[m];
-				history[m] += pow(depth, 4);
+				history[v[m]] += pow(depth, 4);
 				return beta;
 			}
 		}
@@ -483,14 +483,17 @@ int main(int argc, char *argv[])
 			vector<MoveNode> tree;
 			//minimax(b, tree, t, 2);
 			//std::fill(killer.begin(), killer.begin() + 2, -1);
+			killer.clear();
 			std::fill_n(std::back_inserter(killer), 2, -1);
 			beginT = clock();
 			//max(b, tree, t, 2, +10000000, -1000000);
 			vector<MoveNode> treetmp;
 			//history = vector<int>(b.getPossibles.size(), 0);
+			history.clear();
+			std::fill_n(std::back_inserter(history), 8*8, 0);
 			for (size_t i = 0; i < 3; i++)
 			{
-				if (max(b, tree, t, i, +10000000, -1000000) != -1) {
+				if (max(b, tree, t, i, -10000000, 1000000) != -1) {
 					treetmp = tree;
 				}
 			}
