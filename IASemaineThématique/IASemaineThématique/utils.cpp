@@ -1,25 +1,45 @@
 #include "utils.h"
 #include <ostream>
 #include <sstream>
+#include <random>
+#include <cassert>
+#include <iostream>
 
-Board::Board(size_t w, size_t h, unsigned char *data) : m_width(w), m_height(h)
+using namespace std;
+
+Board::Board(size_t w, size_t h, unsigned char *data, size_t *hashmap, const size_t &hash) : m_width(w), m_height(h), m_hash(hash)
 {
+	// Seed with a real random value, if available
+	std::random_device r;
+
+	// Choose a random mean between 1 and 6
+	std::default_random_engine e1(r());
+	std::uniform_int_distribution<size_t> uniform_dist(1, static_cast<size_t>(pow(2, 8 * sizeof(size_t)) - 1));
+	
+	
 	m_data = new unsigned char[m_width * m_height];
+	m_hashmap = new size_t[m_width * m_height];
 
 	if (data == nullptr)
 	{
 		for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+		{
 			m_data[i] = None;
+			m_hashmap[i] = uniform_dist(e1);
+		}
 	}
 	else
 	{
 		for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+		{
 			m_data[i] = data[i];
+			m_hashmap[i] = hashmap[i];
+		}
 	}
 
 }
 
-Board::Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data) { m_cacheH = b.m_cacheH; m_cacheV = b.m_cacheV; }
+Board::Board(const Board &b) : Board(b.m_width, b.m_height, b.m_data, b.m_hashmap, b.m_hash) { m_cacheH = b.m_cacheH; m_cacheV = b.m_cacheV; }
 
 
 Board &Board::operator=(const Board &b)
@@ -33,8 +53,12 @@ Board &Board::operator=(const Board &b)
 	m_data = new unsigned char[m_width * m_height];
 
 	for (size_t i = 0, imax = m_width * m_height; i < imax; ++i)
+	{
 		m_data[i] = b.m_data[i];
+		m_hashmap[i] = b.m_hashmap[i];
+	}
 
+	m_hash = b.m_hash;
 	m_cacheH = b.m_cacheH;
 	m_cacheV = b.m_cacheV;
 
@@ -80,6 +104,10 @@ bool Board::play(Type type, size_t pos)
 	m_cacheV.clear();
 
 	m_data[cell1] = m_data[cell2] = type;
+
+	m_hash ^= m_hashmap[cell1];
+	m_hash ^= m_hashmap[cell2];
+
 	return true;
 }
 
@@ -96,6 +124,10 @@ bool Board::undo(Type type, size_t pos)
 	m_cacheV.clear();
 
 	m_data[cell1] = m_data[cell2] = None;
+
+	m_hash ^= m_hashmap[cell1];
+	m_hash ^= m_hashmap[cell2];
+
 	return true;
 }
 
@@ -517,4 +549,255 @@ namespace FDAI
 		return eval;
 	}
 
+	int internal_negamax2(Board &b, Board::Type t, size_t depth)
+	{
+		int eval = -1000000000;
+		std::vector<size_t> v = b.getPossibles(t);
+		for (size_t i = 0, imax = v.size(); i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = -internal_negamax2(b, Board::inverse(t), depth - 1);
+			b.undo(t, v[i]);
+			if (min_eval > eval)
+			eval = min_eval;
+		}
+
+		return eval;
+	}
+
+	int internal_negamax(Board &b, Move *m, Board::Type t, size_t depth, const std::vector<size_t> &v, size_t from, size_t to)
+	{
+		int eval = -1000000000;
+		for (size_t i = from, imax = to; i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = -internal_negamax2(b, Board::inverse(t), depth - 1);
+			b.undo(t, v[i]);
+			if (min_eval > eval)
+			{
+				eval = min_eval;
+				if (m)
+					*m = Move(t, v[i], eval);
+			}
+		}
+
+		return eval;
+	}
+
+	int negamax(Board &b, Move *m, Board::Type t, size_t depth)
+	{
+		if (depth == 0)
+		{
+			Move tmp;
+			int ret = minimax_getMax(b, tmp, t);
+			if (m)
+				*m = tmp;
+			return ret;
+		}
+
+		std::vector<size_t> v = b.getPossibles(t);
+
+		if (v.size() < 8)
+			return internal_negamax(b, m, t, depth, v, 0, v.size());
+
+		int eval = -1000000000;
+		std::vector<Move> v_m(8);
+		std::vector<int> v_eval(8, -1000000000);
+
+		{
+			std::vector<std::future<int>> fut(8);
+			size_t nb = v.size() / 8;
+			std::vector<Board> v_b(8, b);
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i] = std::async(std::launch::async, internal_negamax, std::ref(v_b[i]), &(v_m[i]), t, depth, std::ref(v), i * nb, std::min(i + 1 * nb, v.size()));
+			}
+
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i].wait();
+				v_eval[i] = fut[i].get();
+			}
+		}
+
+		size_t pos = 0;
+		eval = v_eval[0];
+		for (size_t i = 1; i < 8; ++i)
+		{
+			if (v_eval[i] > eval)
+			{
+				eval = v_eval[i];
+				pos = i;
+			}
+		}
+
+		if (m)
+			*m = v_m[pos];
+
+		return eval;
+	}
+
+
+	int alphabeta_max(Board &b, Board::Type t, size_t depth, int alpha, int beta)
+	{
+		if (depth == 0)
+		{
+			return b.evaluate(t);
+		}
+
+		std::vector<size_t> v = b.getPossibles(t);
+		for (size_t i = 0, imax = v.size(); i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = alphabeta_min(b, Board::inverse(t), depth - 1, alpha, beta);
+			b.undo(t, v[i]);
+			if (min_eval > alpha)
+			{
+				alpha = min_eval;
+				if (alpha >= beta)
+					return beta;
+			}
+		}
+
+		return alpha;
+	}
+
+
+	int alphabeta_min(Board &b, Board::Type t, size_t depth, int alpha, int beta)
+	{
+		if (depth == 0)
+		{
+			return b.evaluate(Board::inverse(t));
+		}
+
+		std::vector<size_t> v = b.getPossibles(t);
+		for (size_t i = 0, imax = v.size(); i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int max_eval = alphabeta_max(b, Board::inverse(t), depth - 1, alpha, beta);
+			b.undo(t, v[i]);
+			if (max_eval < beta)
+			{
+				beta = max_eval;
+				if (alpha >= beta)
+					return alpha;
+			}
+		}
+
+		return beta;
+	}
+
+
+	int internal_alphabeta(Board &b, Move *m, Board::Type t, size_t depth, const std::vector<size_t> &v, size_t from, size_t to, int alpha, int beta)
+	{
+		for (size_t i = from, imax = to; i < imax; ++i)
+		{
+			b.play(t, v[i]);
+			int min_eval = alphabeta_min(b, Board::inverse(t), depth - 1, alpha, beta);
+			b.undo(t, v[i]);
+			if (min_eval > alpha)
+			{
+				alpha = min_eval;
+				if (m)
+					*m = Move(t, v[i], alpha);
+
+				if (alpha >= beta)
+					return beta;
+			}
+		}
+
+		return alpha;
+	}
+
+
+	int alphabeta(Board &b, Move *m, Board::Type t, size_t depth, int alpha, int beta)
+	{
+		if (depth == 0)
+		{
+			Move tmp;
+			int ret = minimax_getMax(b, tmp, t);
+			if (m)
+				*m = tmp;
+			return ret;
+		}
+
+		std::vector<size_t> v = b.getPossibles(t);
+
+		if (v.size() < 8)
+			return internal_alphabeta(b, m, t, depth, v, 0, v.size(), alpha, beta);
+
+		int eval = -1000000000;
+		std::vector<Move> v_m(8);
+		std::vector<int> v_eval(8, -1000000000);
+		std::vector<int> v_alpha(8, -1000000000);
+		std::vector<int> v_beta(8, -100000000);
+
+		{
+			std::vector<std::future<int>> fut(8);
+			size_t nb = v.size() / 8;
+			std::vector<Board> v_b(8, b);
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i] = std::async(std::launch::async, internal_alphabeta, std::ref(v_b[i]), &(v_m[i]), t, depth, std::ref(v), i * nb, std::min(i + 1 * nb, v.size()), std::ref(v_alpha[i]), std::ref(v_beta[i]));
+			}
+
+			for (size_t i = 0; i < 8; ++i)
+			{
+				fut[i].wait();
+				v_eval[i] = fut[i].get();
+			}
+		}
+
+		size_t pos = 0;
+		eval = v_eval[0];
+		for (size_t i = 1; i < 8; ++i)
+		{
+			if (v_eval[i] > eval)
+			{
+				eval = v_eval[i];
+				pos = i;
+			}
+		}
+
+		if (m)
+			*m = v_m[pos];
+
+		return eval;
+	}
+}
+
+
+int run(int argc, char *argv[])
+{
+	// Initialisation des datas
+	Board b(8, 8);
+	Board::Type t(Board::Horizontal);
+	int inputPlayerW, inputPlayerH;
+
+	cout << b.toString() << endl;
+
+	// Tant qu'il y a un coup possible
+	while (!b.getPossibles(t).empty())
+	{
+		Move m;
+		if (t == Board::Vertical)
+		{
+			int alpha = -1000000000, beta = 1000000000;
+			FDAI::alphabeta(b, &m, t, 3, alpha, beta);
+		}
+		else
+			m = getMax(b, t);
+
+		b.play(t, m.pos);
+		cout << (t == Board::Horizontal ? "Horizontal" : "Vertical") << endl;
+
+		cout << b.toString() << endl;
+		t = (t == Board::Horizontal ? Board::Vertical : Board::Horizontal);
+	}
+
+	cout << b.toString();
+
+	cout << endl;
+
+	return 0;
 }
