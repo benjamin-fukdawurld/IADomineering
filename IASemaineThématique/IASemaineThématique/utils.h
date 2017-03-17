@@ -3,7 +3,7 @@
 
 #include <functional>
 #include <future>
-
+#include <vector>
 
 class Board
 {
@@ -63,7 +63,6 @@ class Board
 		static Type inverse(Type t) { return (t == Horizontal ? Vertical : Horizontal); }
 
 		size_t getHash() const { return m_hash; }
-
 
 	private:
 
@@ -137,6 +136,5 @@ namespace FDAI
 
 	int alphabeta(Board &b, Move *m, Board::Type t, size_t depth, int alpha, int beta);
 }
-
 
 int run(int argc, char *argv[]);

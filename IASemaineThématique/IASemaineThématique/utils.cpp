@@ -4,8 +4,14 @@
 #include <random>
 #include <cassert>
 #include <iostream>
+#include <ctime>
+#include <iterator>
 
 using namespace std;
+
+vector<int> killer(3, -1);
+vector<int> history;
+clock_t beginT;
 
 Board::Board(size_t w, size_t h, unsigned char *data, size_t *hashmap, const size_t &hash) : m_width(w), m_height(h), m_hash(hash)
 {
@@ -152,8 +158,13 @@ size_t Board::getPos(std::pair<size_t, size_t> p) const
 std::string Board::toString() const
 {
 	std::ostringstream oss;
+	oss << "  ";
+	for (size_t j = 0; j < m_width; ++j)
+		oss << j << " ";
+	oss << endl;
 	for (size_t i = 0; i < m_height; ++i)
 	{
+		oss << i << " ";
 		size_t currentRow = i * m_width;
 		for (size_t j = 0; j < m_width; ++j)
 		{
@@ -637,6 +648,7 @@ namespace FDAI
 		return eval;
 	}
 
+	bool sortWithHistory(size_t i, size_t j) { return (history[i]>history[j]); }
 
 	int alphabeta_max(Board &b, Board::Type t, size_t depth, int alpha, int beta)
 	{
@@ -646,6 +658,19 @@ namespace FDAI
 		}
 
 		std::vector<size_t> v = b.getPossibles(t);
+
+		if (double(clock() - beginT) / CLOCKS_PER_SEC > 3){
+			return -1;
+		}
+
+		if (killer[depth - 1] != -1) {
+			v.insert(v.begin(), killer[depth - 1]);
+		}
+
+		if (history.size() > 0) {
+			std::sort(v.begin(), v.end(), sortWithHistory);
+		}
+
 		for (size_t i = 0, imax = v.size(); i < imax; ++i)
 		{
 			b.play(t, v[i]);
@@ -655,6 +680,8 @@ namespace FDAI
 			{
 				alpha = min_eval;
 				if (alpha >= beta)
+					killer[depth - 1] = v[i];
+					history[v[i]] += pow(4, depth);
 					return beta;
 			}
 		}
@@ -766,7 +793,6 @@ namespace FDAI
 	}
 }
 
-
 int run(int argc, char *argv[])
 {
 	// Initialisation des datas
@@ -780,15 +806,35 @@ int run(int argc, char *argv[])
 	while (!b.getPossibles(t).empty())
 	{
 		Move m;
+		Move tmpM;
 		if (t == Board::Vertical)
 		{
-			int alpha = -1000000000, beta = 1000000000;
-			FDAI::alphabeta(b, &m, t, 3, alpha, beta);
-		}
-		else
-			m = getMax(b, t);
+			killer.clear();
+			std::fill_n(back_inserter(killer), 3, -1);
+			beginT = clock();
+			history.clear();
+			std::fill_n(std::back_inserter(history), 8 * 8, 0);
 
-		b.play(t, m.pos);
+			int alpha = -1000000000, beta = 1000000000;
+			for (size_t i = 0; i < 3; i++)
+			{
+				if (FDAI::alphabeta(b, &m, t, i, alpha, beta) != -1) {
+					tmpM = m;
+				}
+			}
+		}
+		else {
+			cout << "Horizontal Player: Colomn ? ";
+			cin >> inputPlayerW;
+			cout << "Line ? ";
+			cin >> inputPlayerH;
+			std::pair<int, int> p;
+			p.first = inputPlayerW; p.second = inputPlayerH;
+			tmpM.pos = b.getPos(p);
+		}
+			//m = getMax(b, t);
+
+		b.play(t, tmpM.pos);
 		cout << (t == Board::Horizontal ? "Horizontal" : "Vertical") << endl;
 
 		cout << b.toString() << endl;
